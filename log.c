@@ -46,9 +46,10 @@ struct log log;
 
 static void recover_from_log(void);
 static void commit();
+static void install_trans_modified_ul(void);
 
-void
-initlog(int dev)
+
+void initlog(int dev)
 {
   if (sizeof(struct logheader) >= BSIZE)
     panic("initlog: too big logheader");
@@ -61,10 +62,20 @@ initlog(int dev)
   recover_from_log();
 }
 
-// Copy committed blocks from log to their home location
 static void
-install_trans(void)
-{
+install_trans_modified_ul(void){
+  int tail;
+  for(tail = 0;tail<log.lh.n;tail++){
+    if (PANIC_5) {
+      if (tail == log.lh.n/2) panic("[UNDOLOG] Panic in install_trans type 5");
+    }
+    struct buf *mdata = bread(log.dev,log.lh.block[tail]);
+    bwrite(mdata);
+    brelse(mdata);
+  }
+}
+
+void copy_log_to_disk(void){
   int tail;
 
   for (tail = 0; tail < log.lh.n; tail++) {
@@ -78,6 +89,27 @@ install_trans(void)
     brelse(lbuf);
     brelse(dbuf);
   }
+}
+
+// Copy committed blocks from log to their home location
+static void
+install_trans(void)
+{
+  install_trans_modified_ul();
+  
+  // int tail;
+
+  // for (tail = 0; tail < log.lh.n; tail++) {
+  //   if (PANIC_5) {
+  //     if (tail == log.lh.n/2) panic("[UNDOLOG] Panic in install_trans type 5");
+  //   }
+  //   struct buf *lbuf = bread(log.dev, log.start+tail+1); // read log block
+  //   struct buf *dbuf = bread(log.dev, log.lh.block[tail]); // read dst
+  //   memmove(dbuf->data, lbuf->data, BSIZE);  // copy block to dst
+  //   bwrite(dbuf);  // write dst to disk
+  //   brelse(lbuf);
+  //   brelse(dbuf);
+  // }
 }
 
 // Read the log header from disk into the in-memory log header
@@ -115,7 +147,8 @@ static void
 recover_from_log(void)
 {
   read_head();
-  install_trans(); // if committed, copy from log to disk
+  // install_trans(); // if committed, copy from log to disk
+  copy_log_to_disk();
   log.lh.n = 0;
   write_head(); // clear the log
 }
@@ -137,10 +170,11 @@ end_op(void)
   commit();
 }
 
+
 /* DO NOT MODIFY THIS FUNCTION*/
 static void
 commit()
-{
+{ 
   if (log.lh.n > 0) {
     if (PANIC_1) {
       panic("[UNDOLOG] Panic in commit type 1");
@@ -186,4 +220,30 @@ log_write(struct buf *b)
   if (i == log.lh.n)
     log.lh.n++;
   b->flags |= B_DIRTY; // prevent eviction
+}
+
+
+
+/// i read b, now this a old buffer that i want to write in the log.
+void write_log_ul(struct buf* b){
+  int i;
+  if (log.lh.n >= LOGSIZE || log.lh.n >= log.size - 1)
+    panic("too big a transaction");
+
+  for (i = 0; i < log.lh.n; i++) {
+    if (log.lh.block[i] == b->blockno)   // log absorbtion
+      break;
+  }
+  log.lh.block[i] = b->blockno;
+  if (i == log.lh.n){
+  /// only if this the first time, this block is being changed write the original 
+  /// value to the log.
+
+    log.lh.n++;
+  /// write to buffer 
+    struct buf* to = bread(log.dev,log.start+1+i);
+    memmove(to->data,b->data,BSIZE);
+    bwrite(to);
+    brelse(to);
+  }
 }

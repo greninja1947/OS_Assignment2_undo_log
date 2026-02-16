@@ -103,7 +103,8 @@ bwrite(struct buf *b)
 struct buf* 
 bread_wr(uint dev, uint blockno) {
   // IMPLEMENT YOUR CODE HERE
-  return 0;
+
+  return bread(dev,blockno);
 }
 
 // Release a buffer.

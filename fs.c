@@ -43,6 +43,7 @@ bzero(int dev, int bno)
   struct buf *bp;
 
   bp = bread_wr(dev, bno);
+  write_log_ul(bp);  /// writing this old block to memory.
   memset(bp->data, 0, BSIZE);
   log_write(bp);
   brelse(bp);
@@ -60,6 +61,7 @@ balloc(uint dev)
   bp = 0;
   for(b = 0; b < sb.size; b += BPB){
     bp = bread_wr(dev, BBLOCK(b, sb));
+    write_log_ul(bp);
     for(bi = 0; bi < BPB && b + bi < sb.size; bi++){
       m = 1 << (bi % 8);
       if((bp->data[bi/8] & m) == 0){  // Is block free?
@@ -84,6 +86,7 @@ bfree(int dev, uint b)
   int bi, m;
 
   bp = bread_wr(dev, BBLOCK(b, sb));
+  write_log_ul(bp);
   bi = b % BPB;
   m = 1 << (bi % 8);
   if((bp->data[bi/8] & m) == 0)
@@ -135,6 +138,7 @@ ialloc(uint dev, short type)
 
   for(inum = 1; inum < sb.ninodes; inum++){
     bp = bread_wr(dev, IBLOCK(inum, sb));
+    write_log_ul(bp);
     dip = (struct dinode*)bp->data + inum%IPB;
     if(dip->type == 0){  // a free inode
       memset(dip, 0, sizeof(*dip));
@@ -179,6 +183,7 @@ iupdate(struct inode *ip)
   struct dinode *dip;
 
   bp = bread_wr(ip->dev, IBLOCK(ip->inum, sb));
+  write_log_ul(bp);
   dip = (struct dinode*)bp->data + ip->inum%IPB;
   dip->type = ip->type;
   dip->major = ip->major;
@@ -308,6 +313,7 @@ itrunc(struct inode *ip)
 
   if(ip->addrs[NDIRECT]){
     bp = bread_wr(ip->dev, ip->addrs[NDIRECT]);
+    write_log_ul(bp);
     a = (uint*)bp->data;
     for(j = 0; j < NINDIRECT; j++){
       if(a[j])
@@ -371,6 +377,7 @@ writei(struct inode *ip, char *src, uint off, uint n)
 
   for(tot=0; tot<n; tot+=m, off+=m, src+=m){
     bp = bread_wr(ip->dev, bmap(ip, off/BSIZE));
+    write_log_ul(bp);
     m = min(n - tot, BSIZE - off%BSIZE);
     memmove(bp->data + off%BSIZE, src, m);
     log_write(bp);
@@ -505,14 +512,19 @@ namex(char *path, int nameiparent, char *name)
     iread(ip);
     if(ip->type != T_DIR){
       iput(ip);
+      cprintf("wtf1.1");
       return 0;
     }
     if(nameiparent && *path == '\0'){
       // Stop one level early.
+      cprintf("wtf1.2");
+
       return ip;
     }
     if((next = dirlookup(ip, name, 0)) == 0){
       iput(ip);
+      cprintf("wtf1.3");
+
       return 0;
     }
     iput(ip);
@@ -520,6 +532,8 @@ namex(char *path, int nameiparent, char *name)
   }
   if(nameiparent){
     iput(ip);
+      cprintf("wtf1.4");
+
     return 0;
   }
   return ip;

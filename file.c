@@ -248,17 +248,20 @@ open(char* path, int omode)
     ip = create(path, T_FILE, 0, 0);
     if(ip == 0){
       end_op();
+      cprintf("wtf");
       return 0;
     }
   } else {
     if((ip = namei(path)) == 0){
       end_op();
+      cprintf("wtf1");
       return 0;
     }
     iread(ip);
     if(ip->type == T_DIR && omode != O_RDONLY){
       iput(ip);
       end_op();
+      cprintf("wtf2");
       return 0;
     }
   }
@@ -267,6 +270,7 @@ open(char* path, int omode)
   if((f = filealloc()) == 0) { 
     iput(ip);
     end_op();
+    cprintf("wtf3");
     return 0;
   }
 
